@@ -192,33 +192,112 @@ async function processZipFile(projectId, filePath) {
                 const fileName = path_1.default.basename(entryPath);
                 const parentDir = path_1.default.dirname(entryPath) === '.' ? null : path_1.default.dirname(entryPath);
                 const fileType = path_1.default.extname(fileName);
-                // Get content preview for text files
-                let contentPreview = undefined;
-                if (['.txt', '.xml', '.json', '.js', '.ts', '.html', '.css', '.java', '.py'].includes(fileType.toLowerCase())) {
+                // Check if this is a JAR file
+                if (fileType.toLowerCase() === '.jar') {
+                    console.log(`Processing JAR file: ${entryPath}`);
                     try {
-                        const content = entry.getData().toString('utf8');
-                        contentPreview = content.substring(0, 500); // First 500 characters
+                        // Extract JAR contents
+                        const jarBuffer = entry.getData();
+                        const jarZip = new adm_zip_1.default(jarBuffer);
+                        const jarEntries = jarZip.getEntries();
+                        console.log(`Found ${jarEntries.length} entries in JAR file ${fileName}`);
+                        // Process JAR contents
+                        for (const jarEntry of jarEntries) {
+                            if (!jarEntry.isDirectory) {
+                                const jarEntryPath = `${entryPath}/${jarEntry.entryName}`;
+                                const jarFileName = path_1.default.basename(jarEntry.entryName);
+                                const jarParentDir = path_1.default.dirname(jarEntry.entryName) === '.' ? entryPath : `${entryPath}/${path_1.default.dirname(jarEntry.entryName)}`;
+                                const jarFileType = path_1.default.extname(jarFileName);
+                                // Get content preview for text files
+                                let contentPreview = undefined;
+                                if (['.txt', '.xml', '.json', '.js', '.ts', '.html', '.css', '.java', '.py', '.properties'].includes(jarFileType.toLowerCase())) {
+                                    try {
+                                        const content = jarEntry.getData().toString('utf8');
+                                        contentPreview = content.substring(0, 500); // First 500 characters
+                                    }
+                                    catch (error) {
+                                        // Skip content preview for binary files
+                                    }
+                                }
+                                try {
+                                    await ExtractedFile_1.ExtractedFileModel.create({
+                                        project_id: projectId,
+                                        file_path: jarEntryPath,
+                                        file_name: jarFileName,
+                                        file_type: jarFileType,
+                                        file_size: jarEntry.header.size,
+                                        content_preview: contentPreview,
+                                        is_directory: false,
+                                        parent_directory: jarParentDir
+                                    });
+                                    processedFiles++;
+                                }
+                                catch (dbError) {
+                                    console.error(`Error saving JAR file ${jarEntryPath}:`, dbError);
+                                    // Continue processing other files
+                                }
+                            }
+                            else {
+                                // Handle JAR directories
+                                const jarDirPath = jarEntry.entryName.replace(/\/$/, ''); // Remove trailing slash
+                                if (jarDirPath) {
+                                    const fullJarDirPath = `${entryPath}/${jarDirPath}`;
+                                    try {
+                                        await ExtractedFile_1.ExtractedFileModel.create({
+                                            project_id: projectId,
+                                            file_path: fullJarDirPath,
+                                            file_name: path_1.default.basename(jarDirPath),
+                                            file_type: undefined,
+                                            file_size: undefined,
+                                            content_preview: undefined,
+                                            is_directory: true,
+                                            parent_directory: path_1.default.dirname(jarDirPath) === '.' ? entryPath : `${entryPath}/${path_1.default.dirname(jarDirPath)}`
+                                        });
+                                        processedFiles++;
+                                    }
+                                    catch (dbError) {
+                                        console.error(`Error saving JAR directory ${fullJarDirPath}:`, dbError);
+                                        // Continue processing other files
+                                    }
+                                }
+                            }
+                        }
                     }
-                    catch (error) {
-                        // Skip content preview for binary files
+                    catch (jarError) {
+                        console.error(`Error processing JAR file ${entryPath}:`, jarError);
+                        // Continue with other files
                     }
                 }
-                try {
-                    await ExtractedFile_1.ExtractedFileModel.create({
-                        project_id: projectId,
-                        file_path: entryPath,
-                        file_name: fileName,
-                        file_type: fileType,
-                        file_size: entry.header.size,
-                        content_preview: contentPreview,
-                        is_directory: false,
-                        parent_directory: parentDir || undefined
-                    });
-                    processedFiles++;
-                }
-                catch (dbError) {
-                    console.error(`Error saving file ${entryPath}:`, dbError);
-                    // Continue processing other files
+                else {
+                    // Handle regular files (non-JAR)
+                    // Get content preview for text files
+                    let contentPreview = undefined;
+                    if (['.txt', '.xml', '.json', '.js', '.ts', '.html', '.css', '.java', '.py', '.properties'].includes(fileType.toLowerCase())) {
+                        try {
+                            const content = entry.getData().toString('utf8');
+                            contentPreview = content.substring(0, 500); // First 500 characters
+                        }
+                        catch (error) {
+                            // Skip content preview for binary files
+                        }
+                    }
+                    try {
+                        await ExtractedFile_1.ExtractedFileModel.create({
+                            project_id: projectId,
+                            file_path: entryPath,
+                            file_name: fileName,
+                            file_type: fileType,
+                            file_size: entry.header.size,
+                            content_preview: contentPreview,
+                            is_directory: false,
+                            parent_directory: parentDir || undefined
+                        });
+                        processedFiles++;
+                    }
+                    catch (dbError) {
+                        console.error(`Error saving file ${entryPath}:`, dbError);
+                        // Continue processing other files
+                    }
                 }
             }
             else {

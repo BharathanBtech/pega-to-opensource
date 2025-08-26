@@ -8,7 +8,8 @@ import {
   getProject, 
   getExtractedFiles, 
   deleteProject,
-  debugProjects
+  debugProjects,
+  getFileContent
 } from '../controllers/projectController';
 import { authenticateToken } from '../middleware/auth';
 
@@ -53,6 +54,7 @@ router.post('/upload', upload.single('file'), uploadProject);
 router.get('/', getProjects);
 router.get('/debug', debugProjects); // Debug endpoint
 router.get('/:id/files', getExtractedFiles);
+router.get('/:projectId/files/:filePath(*)', getFileContent);
 router.get('/:id', getProject);
 router.delete('/:id', deleteProject);
 

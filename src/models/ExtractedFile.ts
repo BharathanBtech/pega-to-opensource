@@ -87,4 +87,13 @@ export class ExtractedFileModel {
     
     return result.rows.map(row => row.parent_directory);
   }
+
+  static async findByProjectIdAndPath(projectId: number, filePath: string): Promise<ExtractedFile | null> {
+    const result = await pool.query(
+      'SELECT * FROM extracted_files WHERE project_id = $1 AND file_path = $2',
+      [projectId, filePath]
+    );
+    
+    return result.rows[0] || null;
+  }
 }

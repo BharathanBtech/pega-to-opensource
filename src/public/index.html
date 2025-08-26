@@ -182,11 +182,16 @@
         }
 
         .file-item {
-            padding: 10px;
+            padding: 12px;
             border-bottom: 1px solid #eee;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            transition: background-color 0.2s;
+        }
+
+        .file-item:hover {
+            background-color: #f8f9fa;
         }
 
         .file-item:last-child {
@@ -195,6 +200,69 @@
 
         .file-icon {
             margin-right: 10px;
+            font-size: 16px;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .file-path {
+            font-size: 12px;
+            color: #666;
+            margin-left: 10px;
+        }
+
+        .file-size {
+            font-size: 12px;
+            color: #666;
+            min-width: 80px;
+            text-align: right;
+        }
+
+        .breadcrumb {
+            background: #f8f9fa;
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        .breadcrumb span {
+            color: #667eea;
+            cursor: pointer;
+        }
+
+        .breadcrumb span:hover {
+            text-decoration: underline;
+        }
+
+        .breadcrumb .separator {
+            color: #666;
+            margin: 0 8px;
+        }
+
+        .file-stats {
+            background: #e8f4fd;
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            color: #2c3e50;
+        }
+
+        .compact-view {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
         }
 
         .pagination {
@@ -239,6 +307,100 @@
             margin-bottom: 20px;
             display: flex;
             justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80vh;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px 10px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .close {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .close:hover {
+            opacity: 0.7;
+        }
+
+        .modal-body {
+            padding: 20px;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .file-content {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .view-icon {
+            color: #667eea;
+            cursor: pointer;
+            font-size: 16px;
+            margin-left: 10px;
+        }
+
+        .view-icon:hover {
+            color: #5a6fd8;
+        }
+
+        .file-item .file-actions {
+            display: flex;
             align-items: center;
         }
     </style>
@@ -347,21 +509,51 @@
                         <h2>Project Files</h2>
                         <button onclick="showProjectsSection()" class="btn-secondary">← Back to Projects</button>
                     </div>
-                    <div id="filesList"></div>
+                    
+                    <!-- Breadcrumb Navigation -->
+                    <div id="breadcrumb" class="breadcrumb">
+                        <span onclick="navigateToPath('')">Root</span>
+                    </div>
+                    
+                    <!-- File Statistics -->
+                    <div id="fileStats" class="file-stats"></div>
+                    
+                    <!-- Files List -->
+                    <div id="filesList" class="compact-view"></div>
+                    
+                    <!-- Pagination -->
                     <div id="pagination" class="pagination"></div>
                 </div>
             </div>
 
-            <!-- Alert Messages -->
-            <div id="alertContainer"></div>
-        </div>
-    </div>
+                         <!-- Alert Messages -->
+             <div id="alertContainer"></div>
+         </div>
+     </div>
+
+     <!-- File Content Modal -->
+     <div id="fileModal" class="modal">
+         <div class="modal-content">
+             <div class="modal-header">
+                 <h3 id="modalFileName">File Content</h3>
+                 <span class="close" onclick="closeFileModal()">&times;</span>
+             </div>
+             <div class="modal-body">
+                 <div id="modalFileContent" class="file-content"></div>
+                 <div class="file-actions">
+                     <button onclick="closeFileModal()" class="btn-secondary">Close</button>
+                 </div>
+             </div>
+         </div>
+     </div>
 
     <script>
         const API_BASE = 'http://localhost:3000/api';
         let currentUser = null;
         let currentProject = null;
         let currentPage = 1;
+        let currentPath = '';
+        let currentFiles = [];
 
         // Authentication Functions
         function showLogin() {
@@ -592,6 +784,7 @@
         async function viewFiles(projectId) {
             currentProject = projectId;
             currentPage = 1;
+            currentPath = '';
             await loadFiles();
             document.getElementById('uploadSection').classList.remove('active');
             document.getElementById('projectsSection').classList.remove('active');
@@ -601,13 +794,23 @@
 
         async function loadFiles() {
             try {
-                const response = await fetch(`${API_BASE}/projects/${currentProject}/files?page=${currentPage}&limit=20`, {
+                const url = new URL(`${API_BASE}/projects/${currentProject}/files`);
+                url.searchParams.set('page', currentPage.toString());
+                url.searchParams.set('limit', '50'); // Increased limit for better pagination
+                if (currentPath) {
+                    url.searchParams.set('directory', currentPath);
+                }
+
+                const response = await fetch(url.toString(), {
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
                 });
 
                 const data = await response.json();
                 if (response.ok) {
+                    currentFiles = data.files;
                     displayFiles(data.files, data.pagination);
+                    updateBreadcrumb();
+                    updateFileStats(data.files, data.pagination);
                 } else {
                     showAlert(data.error, 'error');
                 }
@@ -621,23 +824,42 @@
             const paginationDiv = document.getElementById('pagination');
 
             if (files.length === 0) {
-                filesList.innerHTML = '<p>No files found in this project.</p>';
+                filesList.innerHTML = '<p style="padding: 20px; text-align: center; color: #666;">No files found in this directory.</p>';
                 paginationDiv.innerHTML = '';
                 return;
             }
 
-            filesList.innerHTML = files.map(file => `
-                <div class="file-item">
-                    <div>
-                        <span class="file-icon">${file.is_directory ? '📁' : '📄'}</span>
-                        <strong>${file.file_name}</strong>
-                        ${file.file_type ? `<small>(${file.file_type})</small>` : ''}
+            // Sort files: directories first, then files
+            const sortedFiles = [...files].sort((a, b) => {
+                if (a.is_directory && !b.is_directory) return -1;
+                if (!a.is_directory && b.is_directory) return 1;
+                return a.file_name.localeCompare(b.file_name);
+            });
+
+            filesList.innerHTML = sortedFiles.map(file => {
+                const icon = file.is_directory ? '📁' : getFileIcon(file.file_type);
+                const clickHandler = file.is_directory ? `onclick="navigateToDirectory('${file.file_path}')"` : '';
+                const cursorStyle = file.is_directory ? 'cursor: pointer;' : '';
+                const viewIcon = !file.is_directory ? `<span class="view-icon" onclick="viewFileContent('${file.file_path}')" title="View file content">👁️</span>` : '';
+                
+                return `
+                    <div class="file-item" ${clickHandler} style="${cursorStyle}">
+                        <div class="file-info">
+                            <span class="file-icon">${icon}</span>
+                            <div>
+                                <div class="file-name">${file.file_name}</div>
+                                ${file.parent_directory ? `<div class="file-path">${file.parent_directory}</div>` : ''}
+                            </div>
+                        </div>
+                        <div class="file-actions">
+                            <div class="file-size">
+                                ${file.file_size ? formatFileSize(file.file_size) : ''}
+                            </div>
+                            ${viewIcon}
+                        </div>
                     </div>
-                    <div>
-                        ${file.file_size ? `<small>${formatFileSize(file.file_size)}</small>` : ''}
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
 
             // Pagination
             paginationDiv.innerHTML = '';
@@ -655,6 +877,112 @@
         async function changePage(page) {
             currentPage = page;
             await loadFiles();
+        }
+
+        function navigateToDirectory(path) {
+            currentPath = path;
+            currentPage = 1;
+            loadFiles();
+        }
+
+        function navigateToPath(path) {
+            currentPath = path;
+            currentPage = 1;
+            loadFiles();
+        }
+
+        function updateBreadcrumb() {
+            const breadcrumbDiv = document.getElementById('breadcrumb');
+            if (!currentPath) {
+                breadcrumbDiv.innerHTML = '<span onclick="navigateToPath(\'\')">Root</span>';
+                return;
+            }
+
+            const pathParts = currentPath.split('/');
+            let breadcrumbHTML = '<span onclick="navigateToPath(\'\')">Root</span>';
+            let currentPathBuilder = '';
+
+            pathParts.forEach((part, index) => {
+                if (part) {
+                    currentPathBuilder += (currentPathBuilder ? '/' : '') + part;
+                    breadcrumbHTML += `<span class="separator">/</span><span onclick="navigateToPath('${currentPathBuilder}')">${part}</span>`;
+                }
+            });
+
+            breadcrumbDiv.innerHTML = breadcrumbHTML;
+        }
+
+        function updateFileStats(files, pagination) {
+            const statsDiv = document.getElementById('fileStats');
+            const totalFiles = files.length;
+            const directories = files.filter(f => f.is_directory).length;
+            const regularFiles = totalFiles - directories;
+            
+            statsDiv.innerHTML = `
+                Showing ${totalFiles} items (${directories} directories, ${regularFiles} files) | 
+                Page ${pagination.page} of ${pagination.pages} | 
+                Total: ${pagination.total} items
+            `;
+        }
+
+        function getFileIcon(fileType) {
+            if (!fileType) return '📄';
+            
+            const iconMap = {
+                '.jar': '📦',
+                '.xml': '📋',
+                '.properties': '⚙️',
+                '.java': '☕',
+                '.class': '⚡',
+                '.txt': '📝',
+                '.json': '📄',
+                '.js': '📜',
+                '.html': '🌐',
+                '.css': '🎨',
+                '.py': '🐍',
+                '.sql': '🗄️',
+                '.md': '📖',
+                '.gitignore': '🚫',
+                '.MF': '📋'
+            };
+            
+            return iconMap[fileType.toLowerCase()] || '📄';
+        }
+
+        async function viewFileContent(filePath) {
+            try {
+                const response = await fetch(`${API_BASE}/projects/${currentProject}/files/${encodeURIComponent(filePath)}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    document.getElementById('modalFileName').textContent = data.fileName;
+                    document.getElementById('modalFileContent').textContent = data.content;
+                    
+                    if (data.truncated) {
+                        document.getElementById('modalFileContent').textContent += '\n\n... (Content truncated - showing first 500 characters)';
+                    }
+                    
+                    document.getElementById('fileModal').style.display = 'block';
+                } else {
+                    showAlert(data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('Failed to load file content.', 'error');
+            }
+        }
+
+        function closeFileModal() {
+            document.getElementById('fileModal').style.display = 'none';
+        }
+
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {
+            const modal = document.getElementById('fileModal');
+            if (event.target === modal) {
+                closeFileModal();
+            }
         }
 
         async function deleteProject(projectId) {
