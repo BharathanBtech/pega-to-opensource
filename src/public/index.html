@@ -301,7 +301,10 @@
 
                 <!-- Upload Section -->
                 <div id="uploadSection" class="upload-section active">
-                    <h2>Upload Pega Application</h2>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2>Upload Pega Application</h2>
+                        <button onclick="showProjectsSection()" class="btn-secondary">View My Projects</button>
+                    </div>
                     <form id="uploadForm">
                         <div class="form-group">
                             <label for="projectName">Project Name:</label>
@@ -329,7 +332,10 @@
 
                 <!-- Projects Section -->
                 <div id="projectsSection" class="projects-section">
-                    <h2>Your Projects</h2>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2>Your Projects</h2>
+                        <button onclick="showUploadSection()" class="btn-secondary">← Back to Upload</button>
+                    </div>
                     <button onclick="loadProjects()" style="margin-bottom: 10px;">Refresh Projects</button>
                     <button onclick="debugProjects()" style="margin-bottom: 10px; margin-left: 10px; background: #e67e22;">Debug All Projects</button>
                     <div id="projectsList"></div>
@@ -337,7 +343,10 @@
 
                 <!-- Files Section -->
                 <div id="filesSection" class="files-section">
-                    <h2>Project Files</h2>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2>Project Files</h2>
+                        <button onclick="showProjectsSection()" class="btn-secondary">← Back to Projects</button>
+                    </div>
                     <div id="filesList"></div>
                     <div id="pagination" class="pagination"></div>
                 </div>
@@ -390,6 +399,7 @@
                 const data = await response.json();
                 if (response.ok) {
                     localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
                     currentUser = data.user;
                     showMainApp();
                     loadProjects();
@@ -418,6 +428,7 @@
                 const data = await response.json();
                 if (response.ok) {
                     localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
                     currentUser = data.user;
                     showMainApp();
                     loadProjects();
@@ -446,11 +457,14 @@
 
                 const data = await response.json();
                 if (response.ok) {
-                    showAlert('Project uploaded successfully!');
+                    showAlert('Project uploaded successfully! Processing will begin shortly...');
                     document.getElementById('uploadForm').reset();
                     document.getElementById('selectedFile').style.display = 'none';
                     document.querySelector('.file-upload').classList.remove('has-file');
-                    loadProjects();
+                    // Show projects section after upload
+                    setTimeout(() => {
+                        showProjectsSection();
+                    }, 1000);
                 } else {
                     showAlert(data.error, 'error');
                 }
@@ -464,7 +478,30 @@
             document.getElementById('loginSection').style.display = 'none';
             document.getElementById('registerSection').style.display = 'none';
             document.getElementById('mainApp').style.display = 'block';
-            document.getElementById('userDisplayName').textContent = currentUser.username;
+            // Always show upload section by default
+            document.getElementById('uploadSection').classList.add('active');
+            document.getElementById('projectsSection').classList.remove('active');
+            document.getElementById('filesSection').classList.remove('active');
+            updateUserDisplay();
+        }
+
+        function updateUserDisplay() {
+            if (currentUser && currentUser.username) {
+                document.getElementById('userDisplayName').textContent = currentUser.username;
+            } else {
+                // Try to get user info from localStorage
+                const storedUser = localStorage.getItem('user');
+                if (storedUser) {
+                    try {
+                        const user = JSON.parse(storedUser);
+                        document.getElementById('userDisplayName').textContent = user.username;
+                    } catch (e) {
+                        document.getElementById('userDisplayName').textContent = 'User';
+                    }
+                } else {
+                    document.getElementById('userDisplayName').textContent = 'User';
+                }
+            }
         }
 
         async function loadProjects() {
@@ -479,6 +516,7 @@
                 
                 if (response.ok) {
                     displayProjects(data.projects);
+                    // Don't automatically show projects section - let user choose
                 } else {
                     showAlert(data.error, 'error');
                 }
@@ -509,6 +547,21 @@
             }
         }
 
+        function showProjectsSection() {
+            document.getElementById('uploadSection').classList.remove('active');
+            document.getElementById('filesSection').classList.remove('active');
+            document.getElementById('projectsSection').classList.add('active');
+            updateUserDisplay();
+            loadProjects();
+        }
+
+        function showUploadSection() {
+            document.getElementById('projectsSection').classList.remove('active');
+            document.getElementById('filesSection').classList.remove('active');
+            document.getElementById('uploadSection').classList.add('active');
+            updateUserDisplay();
+        }
+
         function displayProjects(projects) {
             const projectsList = document.getElementById('projectsList');
             if (projects.length === 0) {
@@ -529,6 +582,8 @@
                     <div style="margin-top: 10px;">
                         <button onclick="viewFiles(${project.id})" ${project.status !== 'completed' ? 'disabled' : ''}>View Files</button>
                         <button onclick="deleteProject(${project.id})" class="btn-danger">Delete</button>
+                        ${project.status === 'processing' ? '<span style="color: #3498db; margin-left: 10px;">⏳ Processing...</span>' : ''}
+                        ${project.status === 'failed' ? '<span style="color: #e74c3c; margin-left: 10px;">❌ Processing failed</span>' : ''}
                     </div>
                 </div>
             `).join('');
@@ -541,6 +596,7 @@
             document.getElementById('uploadSection').classList.remove('active');
             document.getElementById('projectsSection').classList.remove('active');
             document.getElementById('filesSection').classList.add('active');
+            updateUserDisplay();
         }
 
         async function loadFiles() {
@@ -624,6 +680,7 @@
 
         function logout() {
             localStorage.removeItem('token');
+            localStorage.removeItem('user');
             currentUser = null;
             currentProject = null;
             document.getElementById('mainApp').style.display = 'none';
@@ -661,11 +718,25 @@
         window.addEventListener('load', () => {
             const token = localStorage.getItem('token');
             if (token) {
-                // You could verify the token here
+                // Restore user info from localStorage
+                const storedUser = localStorage.getItem('user');
+                if (storedUser) {
+                    try {
+                        currentUser = JSON.parse(storedUser);
+                    } catch (e) {
+                        currentUser = null;
+                    }
+                }
                 showMainApp();
+                // Load projects in background but stay on upload section
                 loadProjects();
             }
         });
+
+        // Update user display whenever sections change
+        function updateUserDisplayOnSectionChange() {
+            updateUserDisplay();
+        }
     </script>
 </body>
 </html>

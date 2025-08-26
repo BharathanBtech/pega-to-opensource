@@ -44,6 +44,7 @@ router.use(auth_1.authenticateToken);
 // Project routes
 router.post('/upload', upload.single('file'), projectController_1.uploadProject);
 router.get('/', projectController_1.getProjects);
+router.get('/debug', projectController_1.debugProjects); // Debug endpoint
 router.get('/:id/files', projectController_1.getExtractedFiles);
 router.get('/:id', projectController_1.getProject);
 router.delete('/:id', projectController_1.deleteProject);

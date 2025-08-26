@@ -3,9 +3,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteProject = exports.getExtractedFiles = exports.getProject = exports.getProjects = exports.uploadProject = void 0;
+exports.deleteProject = exports.debugProjects = exports.getExtractedFiles = exports.getProject = exports.getProjects = exports.uploadProject = void 0;
 const Project_1 = require("../models/Project");
 const ExtractedFile_1 = require("../models/ExtractedFile");
+const database_1 = __importDefault(require("../config/database"));
 const adm_zip_1 = __importDefault(require("adm-zip"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
@@ -19,6 +20,7 @@ const uploadProject = async (req, res) => {
         if (!name) {
             return res.status(400).json({ error: 'Project name is required' });
         }
+        console.log('Creating project record:', { name, description, userId, filename: req.file.originalname });
         // Create project record
         const project = await Project_1.ProjectModel.create({
             user_id: userId,
@@ -28,8 +30,11 @@ const uploadProject = async (req, res) => {
             file_path: req.file.path,
             file_size: req.file.size
         });
+        console.log('Project created with ID:', project.id);
         // Process the zip file asynchronously
-        processZipFile(project.id, req.file.path);
+        processZipFile(project.id, req.file.path).catch(error => {
+            console.error('Error in async zip processing:', error);
+        });
         res.status(201).json({
             message: 'Project uploaded successfully',
             project: {
@@ -51,8 +56,10 @@ const getProjects = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const offset = (page - 1) * limit;
+        console.log('Getting projects for user:', userId);
         const projects = await Project_1.ProjectModel.findByUserId(userId, limit, offset);
         const total = await Project_1.ProjectModel.countByUserId(userId);
+        console.log('Found projects:', projects.length, 'Total:', total);
         res.json({
             projects,
             pagination: {
@@ -125,6 +132,19 @@ const getExtractedFiles = async (req, res) => {
     }
 };
 exports.getExtractedFiles = getExtractedFiles;
+const debugProjects = async (req, res) => {
+    try {
+        // Get all projects for debugging
+        const result = await database_1.default.query('SELECT * FROM projects ORDER BY created_at DESC');
+        console.log('All projects in database:', result.rows);
+        res.json({ projects: result.rows });
+    }
+    catch (error) {
+        console.error('Debug projects error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+};
+exports.debugProjects = debugProjects;
 const deleteProject = async (req, res) => {
     try {
         const projectId = parseInt(req.params.id);
@@ -154,10 +174,18 @@ const deleteProject = async (req, res) => {
 exports.deleteProject = deleteProject;
 async function processZipFile(projectId, filePath) {
     try {
+        console.log(`Starting to process zip file for project ${projectId}:`, filePath);
+        // Check if file exists
+        if (!fs_1.default.existsSync(filePath)) {
+            throw new Error(`ZIP file not found: ${filePath}`);
+        }
         // Update project status to processing
         await Project_1.ProjectModel.updateStatus(projectId, 'processing');
+        console.log(`Updated project ${projectId} status to processing`);
         const zip = new adm_zip_1.default(filePath);
         const zipEntries = zip.getEntries();
+        console.log(`Found ${zipEntries.length} entries in zip file`);
+        let processedFiles = 0;
         for (const entry of zipEntries) {
             if (!entry.isDirectory) {
                 const entryPath = entry.entryName;
@@ -175,40 +203,56 @@ async function processZipFile(projectId, filePath) {
                         // Skip content preview for binary files
                     }
                 }
-                await ExtractedFile_1.ExtractedFileModel.create({
-                    project_id: projectId,
-                    file_path: entryPath,
-                    file_name: fileName,
-                    file_type: fileType,
-                    file_size: entry.header.size,
-                    content_preview: contentPreview,
-                    is_directory: false,
-                    parent_directory: parentDir || undefined
-                });
+                try {
+                    await ExtractedFile_1.ExtractedFileModel.create({
+                        project_id: projectId,
+                        file_path: entryPath,
+                        file_name: fileName,
+                        file_type: fileType,
+                        file_size: entry.header.size,
+                        content_preview: contentPreview,
+                        is_directory: false,
+                        parent_directory: parentDir || undefined
+                    });
+                    processedFiles++;
+                }
+                catch (dbError) {
+                    console.error(`Error saving file ${entryPath}:`, dbError);
+                    // Continue processing other files
+                }
             }
             else {
                 // Handle directories
                 const dirPath = entry.entryName.replace(/\/$/, ''); // Remove trailing slash
                 if (dirPath) {
-                    await ExtractedFile_1.ExtractedFileModel.create({
-                        project_id: projectId,
-                        file_path: dirPath,
-                        file_name: path_1.default.basename(dirPath),
-                        file_type: undefined,
-                        file_size: undefined,
-                        content_preview: undefined,
-                        is_directory: true,
-                        parent_directory: path_1.default.dirname(dirPath) === '.' ? undefined : path_1.default.dirname(dirPath)
-                    });
+                    try {
+                        await ExtractedFile_1.ExtractedFileModel.create({
+                            project_id: projectId,
+                            file_path: dirPath,
+                            file_name: path_1.default.basename(dirPath),
+                            file_type: undefined,
+                            file_size: undefined,
+                            content_preview: undefined,
+                            is_directory: true,
+                            parent_directory: path_1.default.dirname(dirPath) === '.' ? undefined : path_1.default.dirname(dirPath)
+                        });
+                        processedFiles++;
+                    }
+                    catch (dbError) {
+                        console.error(`Error saving directory ${dirPath}:`, dbError);
+                        // Continue processing other files
+                    }
                 }
             }
         }
         // Update project status to completed
         await Project_1.ProjectModel.updateStatus(projectId, 'completed');
+        console.log(`Successfully completed processing project ${projectId}. Processed ${processedFiles} files/directories`);
     }
     catch (error) {
         console.error('Error processing zip file:', error);
         await Project_1.ProjectModel.updateStatus(projectId, 'failed');
+        console.log(`Marked project ${projectId} as failed`);
     }
 }
 //# sourceMappingURL=projectController.js.map

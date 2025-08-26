@@ -193,6 +193,11 @@ async function processZipFile(projectId: number, filePath: string) {
   try {
     console.log(`Starting to process zip file for project ${projectId}:`, filePath);
     
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`ZIP file not found: ${filePath}`);
+    }
+    
     // Update project status to processing
     await ProjectModel.updateStatus(projectId, 'processing');
     console.log(`Updated project ${projectId} status to processing`);
@@ -201,6 +206,7 @@ async function processZipFile(projectId: number, filePath: string) {
     const zipEntries = zip.getEntries();
     console.log(`Found ${zipEntries.length} entries in zip file`);
 
+    let processedFiles = 0;
     for (const entry of zipEntries) {
       if (!entry.isDirectory) {
         const entryPath = entry.entryName;
@@ -219,37 +225,49 @@ async function processZipFile(projectId: number, filePath: string) {
           }
         }
 
-        await ExtractedFileModel.create({
-          project_id: projectId,
-          file_path: entryPath,
-          file_name: fileName,
-          file_type: fileType,
-          file_size: entry.header.size,
-          content_preview: contentPreview,
-          is_directory: false,
-          parent_directory: parentDir || undefined
-        });
-              } else {
+        try {
+          await ExtractedFileModel.create({
+            project_id: projectId,
+            file_path: entryPath,
+            file_name: fileName,
+            file_type: fileType,
+            file_size: entry.header.size,
+            content_preview: contentPreview,
+            is_directory: false,
+            parent_directory: parentDir || undefined
+          });
+          processedFiles++;
+        } catch (dbError) {
+          console.error(`Error saving file ${entryPath}:`, dbError);
+          // Continue processing other files
+        }
+      } else {
           // Handle directories
           const dirPath = entry.entryName.replace(/\/$/, ''); // Remove trailing slash
           if (dirPath) {
-            await ExtractedFileModel.create({
-              project_id: projectId,
-              file_path: dirPath,
-              file_name: path.basename(dirPath),
-              file_type: undefined,
-              file_size: undefined,
-              content_preview: undefined,
-              is_directory: true,
-              parent_directory: path.dirname(dirPath) === '.' ? undefined : path.dirname(dirPath)
-            });
+            try {
+              await ExtractedFileModel.create({
+                project_id: projectId,
+                file_path: dirPath,
+                file_name: path.basename(dirPath),
+                file_type: undefined,
+                file_size: undefined,
+                content_preview: undefined,
+                is_directory: true,
+                parent_directory: path.dirname(dirPath) === '.' ? undefined : path.dirname(dirPath)
+              });
+              processedFiles++;
+            } catch (dbError) {
+              console.error(`Error saving directory ${dirPath}:`, dbError);
+              // Continue processing other files
+            }
           }
         }
     }
 
     // Update project status to completed
     await ProjectModel.updateStatus(projectId, 'completed');
-    console.log(`Successfully completed processing project ${projectId}`);
+    console.log(`Successfully completed processing project ${projectId}. Processed ${processedFiles} files/directories`);
 
   } catch (error) {
     console.error('Error processing zip file:', error);
