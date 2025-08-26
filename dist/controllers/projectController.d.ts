@@ -7,6 +7,9 @@ export declare const getProjects: (req: AuthRequest, res: Response) => Promise<v
 export declare const getProject: (req: AuthRequest, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
 export declare const getExtractedFiles: (req: AuthRequest, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
 export declare const debugProjects: (req: AuthRequest, res: Response) => Promise<void>;
+export declare const debugProjectFiles: (req: AuthRequest, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
 export declare const deleteProject: (req: AuthRequest, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
+export declare const getFileContent: (req: AuthRequest, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
+export declare const generateRequirements: (req: AuthRequest, res: Response) => Promise<Response<any, Record<string, any>> | undefined>;
 export {};
 //# sourceMappingURL=projectController.d.ts.map

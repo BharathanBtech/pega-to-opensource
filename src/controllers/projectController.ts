@@ -157,6 +157,32 @@ export const debugProjects = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const debugProjectFiles = async (req: AuthRequest, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    const userId = req.user.id;
+
+    // Verify project ownership
+    const project = await ProjectModel.findById(projectId);
+    if (!project || project.user_id !== userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Get file count and sample files
+    const countResult = await pool.query('SELECT COUNT(*) FROM extracted_files WHERE project_id = $1', [projectId]);
+    const sampleFiles = await pool.query('SELECT file_path, file_name, file_type, is_directory FROM extracted_files WHERE project_id = $1 ORDER BY file_path LIMIT 20', [projectId]);
+    
+    res.json({ 
+      projectId,
+      totalFiles: parseInt(countResult.rows[0].count),
+      sampleFiles: sampleFiles.rows
+    });
+  } catch (error) {
+    console.error('Debug project files error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 export const deleteProject = async (req: AuthRequest, res: Response) => {
   try {
     const projectId = parseInt(req.params.id);
@@ -229,6 +255,401 @@ export const getFileContent = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const generateRequirements = async (req: AuthRequest, res: Response) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    const userId = req.user.id;
+
+    // Verify project ownership
+    const project = await ProjectModel.findById(projectId);
+    if (!project || project.user_id !== userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Get all files for this project
+    const allFiles = await ExtractedFileModel.findAllByProjectId(projectId);
+    
+    // Generate requirements document
+    const requirements = await analyzeAndGenerateRequirements(project, allFiles);
+    
+    res.json({
+      projectId,
+      projectName: project.name,
+      requirements,
+      generatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Generate requirements error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+async function analyzeAndGenerateRequirements(project: any, files: any[]): Promise<string> {
+  const analysis = {
+    applicationName: extractApplicationName(project, files),
+    dataModels: extractDataModels(files),
+    workflows: extractWorkflows(files),
+    rules: extractRules(files),
+    integrations: extractIntegrations(files),
+    uiComponents: extractUIComponents(files),
+    configurations: extractConfigurations(files)
+  };
+
+  return generateRequirementsDocument(analysis);
+}
+
+function extractApplicationName(project: any, files: any[]): string {
+  // Try to extract from project name first
+  let appName = project.name;
+  
+  // Look for application.xml or similar files
+  const appFiles = files.filter(f => 
+    f.file_name.toLowerCase().includes('application') && 
+    f.file_type === '.xml'
+  );
+  
+  if (appFiles.length > 0) {
+    // Try to extract from content preview
+    for (const file of appFiles) {
+      if (file.content_preview) {
+        const nameMatch = file.content_preview.match(/<Application[^>]*name="([^"]+)"/i);
+        if (nameMatch) {
+          appName = nameMatch[1];
+          break;
+        }
+      }
+    }
+  }
+  
+  return appName || 'PegaApplication';
+}
+
+function extractDataModels(files: any[]): any[] {
+  const dataModels = [];
+  
+  // Look for class definitions, data types, properties
+  const classFiles = files.filter(f => 
+    f.file_name.toLowerCase().includes('class') && 
+    f.file_type === '.xml'
+  );
+  
+  const propertyFiles = files.filter(f => 
+    f.file_name.toLowerCase().includes('property') && 
+    f.file_type === '.xml'
+  );
+  
+  // Extract class information
+  for (const file of classFiles) {
+    if (file.content_preview) {
+      const className = extractClassName(file.content_preview);
+      const properties = extractProperties(file.content_preview);
+      
+      if (className) {
+        dataModels.push({
+          name: className,
+          type: 'class',
+          properties: properties,
+          source: file.file_path
+        });
+      }
+    }
+  }
+  
+  return dataModels;
+}
+
+function extractWorkflows(files: any[]): any[] {
+  const workflows = [];
+  
+  // Look for flow files, processes, activities
+  const flowFiles = files.filter(f => 
+    (f.file_name.toLowerCase().includes('flow') || 
+     f.file_name.toLowerCase().includes('process') ||
+     f.file_name.toLowerCase().includes('activity')) && 
+    f.file_type === '.xml'
+  );
+  
+  for (const file of flowFiles) {
+    if (file.content_preview) {
+      const flowName = extractFlowName(file.content_preview);
+      const steps = extractFlowSteps(file.content_preview);
+      
+      if (flowName) {
+        workflows.push({
+          name: flowName,
+          steps: steps,
+          source: file.file_path
+        });
+      }
+    }
+  }
+  
+  return workflows;
+}
+
+function extractRules(files: any[]): any[] {
+  const rules = [];
+  
+  // Look for rule files
+  const ruleFiles = files.filter(f => 
+    f.file_name.toLowerCase().includes('rule') && 
+    f.file_type === '.xml'
+  );
+  
+  for (const file of ruleFiles) {
+    if (file.content_preview) {
+      const ruleName = extractRuleName(file.content_preview);
+      const ruleType = extractRuleType(file.content_preview);
+      
+      if (ruleName) {
+        rules.push({
+          name: ruleName,
+          type: ruleType,
+          source: file.file_path
+        });
+      }
+    }
+  }
+  
+  return rules;
+}
+
+function extractIntegrations(files: any[]): any[] {
+  const integrations = [];
+  
+  // Look for connector files, service definitions
+  const connectorFiles = files.filter(f => 
+    (f.file_name.toLowerCase().includes('connector') || 
+     f.file_name.toLowerCase().includes('service') ||
+     f.file_name.toLowerCase().includes('integration')) && 
+    f.file_type === '.xml'
+  );
+  
+  for (const file of connectorFiles) {
+    if (file.content_preview) {
+      const connectorName = extractConnectorName(file.content_preview);
+      const connectorType = extractConnectorType(file.content_preview);
+      
+      if (connectorName) {
+        integrations.push({
+          name: connectorName,
+          type: connectorType,
+          source: file.file_path
+        });
+      }
+    }
+  }
+  
+  return integrations;
+}
+
+function extractUIComponents(files: any[]): any[] {
+  const uiComponents = [];
+  
+  // Look for section files, harness files, flow actions
+  const uiFiles = files.filter(f => 
+    (f.file_name.toLowerCase().includes('section') || 
+     f.file_name.toLowerCase().includes('harness') ||
+     f.file_name.toLowerCase().includes('flowaction')) && 
+    f.file_type === '.xml'
+  );
+  
+  for (const file of uiFiles) {
+    if (file.content_preview) {
+      const componentName = extractComponentName(file.content_preview);
+      const componentType = extractComponentType(file.content_preview);
+      
+      if (componentName) {
+        uiComponents.push({
+          name: componentName,
+          type: componentType,
+          source: file.file_path
+        });
+      }
+    }
+  }
+  
+  return uiComponents;
+}
+
+function extractConfigurations(files: any[]): any[] {
+  const configurations = [];
+  
+  // Look for configuration files, properties files
+  const configFiles = files.filter(f => 
+    f.file_type === '.properties' || 
+    f.file_name.toLowerCase().includes('config')
+  );
+  
+  for (const file of configFiles) {
+    if (file.content_preview) {
+      configurations.push({
+        name: file.file_name,
+        type: 'configuration',
+        content: file.content_preview,
+        source: file.file_path
+      });
+    }
+  }
+  
+  return configurations;
+}
+
+// Helper functions for extraction
+function extractClassName(content: string): string | null {
+  const match = content.match(/<Class[^>]*name="([^"]+)"/i);
+  return match ? match[1] : null;
+}
+
+function extractProperties(content: string): string[] {
+  const properties = [];
+  const propertyMatches = content.match(/<Property[^>]*name="([^"]+)"/gi);
+  if (propertyMatches) {
+    properties.push(...propertyMatches.map(m => m.match(/name="([^"]+)"/)?.[1] || ''));
+  }
+  return properties;
+}
+
+function extractFlowName(content: string): string | null {
+  const match = content.match(/<Flow[^>]*name="([^"]+)"/i);
+  return match ? match[1] : null;
+}
+
+function extractFlowSteps(content: string): string[] {
+  const steps = [];
+  const stepMatches = content.match(/<Step[^>]*name="([^"]+)"/gi);
+  if (stepMatches) {
+    steps.push(...stepMatches.map(m => m.match(/name="([^"]+)"/)?.[1] || ''));
+  }
+  return steps;
+}
+
+function extractRuleName(content: string): string | null {
+  const match = content.match(/<Rule[^>]*name="([^"]+)"/i);
+  return match ? match[1] : null;
+}
+
+function extractRuleType(content: string): string | null {
+  const match = content.match(/<Rule[^>]*type="([^"]+)"/i);
+  return match ? match[1] : null;
+}
+
+function extractConnectorName(content: string): string | null {
+  const match = content.match(/<Connector[^>]*name="([^"]+)"/i);
+  return match ? match[1] : null;
+}
+
+function extractConnectorType(content: string): string | null {
+  const match = content.match(/<Connector[^>]*type="([^"]+)"/i);
+  return match ? match[1] : null;
+}
+
+function extractComponentName(content: string): string | null {
+  const match = content.match(/<(Section|Harness|FlowAction)[^>]*name="([^"]+)"/i);
+  return match ? match[2] : null;
+}
+
+function extractComponentType(content: string): string | null {
+  const match = content.match(/<(Section|Harness|FlowAction)[^>]*/i);
+  return match ? match[1] : null;
+}
+
+function generateRequirementsDocument(analysis: any): string {
+  const { applicationName, dataModels, workflows, rules, integrations, uiComponents, configurations } = analysis;
+  
+  let requirements = `# Application Requirements Document
+Generated from Pega Application: ${applicationName}
+Generated on: ${new Date().toLocaleDateString()}
+
+## 1. Application Overview
+- **Application Name**: ${applicationName}
+- **Type**: Business Process Management Application
+- **Platform**: Converted from Pega to Open Source
+
+## 2. Data Models
+${dataModels.length > 0 ? dataModels.map((model: any) => `
+### ${model.name}
+- **Type**: ${model.type}
+- **Properties**: ${model.properties.join(', ') || 'None identified'}
+- **Source**: ${model.source}
+`).join('') : '- No data models identified'}
+
+## 3. Workflows
+${workflows.length > 0 ? workflows.map((workflow: any) => `
+### ${workflow.name}
+- **Steps**: ${workflow.steps.join(' → ') || 'No steps identified'}
+- **Source**: ${workflow.source}
+`).join('') : '- No workflows identified'}
+
+## 4. Business Rules
+${rules.length > 0 ? rules.map((rule: any) => `
+### ${rule.name}
+- **Type**: ${rule.type || 'Unknown'}
+- **Source**: ${rule.source}
+`).join('') : '- No rules identified'}
+
+## 5. Integrations
+${integrations.length > 0 ? integrations.map((integration: any) => `
+### ${integration.name}
+- **Type**: ${integration.type || 'Unknown'}
+- **Source**: ${integration.source}
+`).join('') : '- No integrations identified'}
+
+## 6. UI Components
+${uiComponents.length > 0 ? uiComponents.map((component: any) => `
+### ${component.name}
+- **Type**: ${component.type || 'Unknown'}
+- **Source**: ${component.source}
+`).join('') : '- No UI components identified'}
+
+## 7. Configuration
+${configurations.length > 0 ? configurations.map((config: any) => `
+### ${config.name}
+- **Type**: ${config.type}
+- **Content**: ${config.content.substring(0, 200)}${config.content.length > 200 ? '...' : ''}
+- **Source**: ${config.source}
+`).join('') : '- No configurations identified'}
+
+## 8. Implementation Recommendations
+
+### For Replit:
+- Use Node.js/Express or Python/Flask for backend
+- Implement RESTful APIs for data operations
+- Use React or Vue.js for frontend
+- Store data in SQLite or PostgreSQL
+- Implement authentication using JWT
+
+### For Lovable:
+- Create a new project with the same name: "${applicationName}"
+- Implement the identified data models as database tables
+- Create workflows using Lovable's workflow builder
+- Build UI components using Lovable's component library
+- Configure integrations using Lovable's connector framework
+
+### For Firebase:
+- Use Firestore for data storage
+- Implement Cloud Functions for business logic
+- Use Firebase Authentication
+- Create React/Vue frontend with Firebase SDK
+- Use Firebase Hosting for deployment
+
+## 9. Next Steps
+1. Review and validate the extracted requirements
+2. Choose your target platform (Replit/Lovable/Firebase)
+3. Set up the development environment
+4. Implement data models and database schema
+5. Build the core workflows and business logic
+6. Create the user interface components
+7. Configure integrations and external services
+8. Test and deploy the application
+
+---
+*This document was automatically generated from Pega application files.*
+`;
+
+  return requirements;
+}
+
 async function processZipFile(projectId: number, filePath: string) {
   try {
     console.log(`Starting to process zip file for project ${projectId}:`, filePath);
@@ -247,141 +668,10 @@ async function processZipFile(projectId: number, filePath: string) {
     console.log(`Found ${zipEntries.length} entries in zip file`);
 
     let processedFiles = 0;
-    for (const entry of zipEntries) {
-      if (!entry.isDirectory) {
-        const entryPath = entry.entryName;
-        const fileName = path.basename(entryPath);
-        const parentDir = path.dirname(entryPath) === '.' ? null : path.dirname(entryPath);
-        const fileType = path.extname(fileName);
-        
-        // Check if this is a JAR file
-        if (fileType.toLowerCase() === '.jar') {
-          console.log(`Processing JAR file: ${entryPath}`);
-          try {
-            // Extract JAR contents
-            const jarBuffer = entry.getData();
-            const jarZip = new AdmZip(jarBuffer);
-            const jarEntries = jarZip.getEntries();
-            
-            console.log(`Found ${jarEntries.length} entries in JAR file ${fileName}`);
-            
-            // Process JAR contents
-            for (const jarEntry of jarEntries) {
-              if (!jarEntry.isDirectory) {
-                const jarEntryPath = `${entryPath}/${jarEntry.entryName}`;
-                const jarFileName = path.basename(jarEntry.entryName);
-                const jarParentDir = path.dirname(jarEntry.entryName) === '.' ? entryPath : `${entryPath}/${path.dirname(jarEntry.entryName)}`;
-                const jarFileType = path.extname(jarFileName);
-                
-                // Get content preview for text files
-                let contentPreview: string | undefined = undefined;
-                if (['.txt', '.xml', '.json', '.js', '.ts', '.html', '.css', '.java', '.py', '.properties'].includes(jarFileType.toLowerCase())) {
-                  try {
-                    const content = jarEntry.getData().toString('utf8');
-                    contentPreview = content.substring(0, 500); // First 500 characters
-                  } catch (error) {
-                    // Skip content preview for binary files
-                  }
-                }
-
-                try {
-                  await ExtractedFileModel.create({
-                    project_id: projectId,
-                    file_path: jarEntryPath,
-                    file_name: jarFileName,
-                    file_type: jarFileType,
-                    file_size: jarEntry.header.size,
-                    content_preview: contentPreview,
-                    is_directory: false,
-                    parent_directory: jarParentDir
-                  });
-                  processedFiles++;
-                } catch (dbError) {
-                  console.error(`Error saving JAR file ${jarEntryPath}:`, dbError);
-                  // Continue processing other files
-                }
-              } else {
-                // Handle JAR directories
-                const jarDirPath = jarEntry.entryName.replace(/\/$/, ''); // Remove trailing slash
-                if (jarDirPath) {
-                  const fullJarDirPath = `${entryPath}/${jarDirPath}`;
-                  try {
-                    await ExtractedFileModel.create({
-                      project_id: projectId,
-                      file_path: fullJarDirPath,
-                      file_name: path.basename(jarDirPath),
-                      file_type: undefined,
-                      file_size: undefined,
-                      content_preview: undefined,
-                      is_directory: true,
-                      parent_directory: path.dirname(jarDirPath) === '.' ? entryPath : `${entryPath}/${path.dirname(jarDirPath)}`
-                    });
-                    processedFiles++;
-                  } catch (dbError) {
-                    console.error(`Error saving JAR directory ${fullJarDirPath}:`, dbError);
-                    // Continue processing other files
-                  }
-                }
-              }
-            }
-          } catch (jarError) {
-            console.error(`Error processing JAR file ${entryPath}:`, jarError);
-            // Continue with other files
-          }
-        } else {
-          // Handle regular files (non-JAR)
-          // Get content preview for text files
-          let contentPreview: string | undefined = undefined;
-          if (['.txt', '.xml', '.json', '.js', '.ts', '.html', '.css', '.java', '.py', '.properties'].includes(fileType.toLowerCase())) {
-            try {
-              const content = entry.getData().toString('utf8');
-              contentPreview = content.substring(0, 500); // First 500 characters
-            } catch (error) {
-              // Skip content preview for binary files
-            }
-          }
-
-          try {
-            await ExtractedFileModel.create({
-              project_id: projectId,
-              file_path: entryPath,
-              file_name: fileName,
-              file_type: fileType,
-              file_size: entry.header.size,
-              content_preview: contentPreview,
-              is_directory: false,
-              parent_directory: parentDir || undefined
-            });
-            processedFiles++;
-          } catch (dbError) {
-            console.error(`Error saving file ${entryPath}:`, dbError);
-            // Continue processing other files
-          }
-        }
-      } else {
-        // Handle directories
-        const dirPath = entry.entryName.replace(/\/$/, ''); // Remove trailing slash
-        if (dirPath) {
-          try {
-            await ExtractedFileModel.create({
-              project_id: projectId,
-              file_path: dirPath,
-              file_name: path.basename(dirPath),
-              file_type: undefined,
-              file_size: undefined,
-              content_preview: undefined,
-              is_directory: true,
-              parent_directory: path.dirname(dirPath) === '.' ? undefined : path.dirname(dirPath)
-            });
-            processedFiles++;
-          } catch (dbError) {
-            console.error(`Error saving directory ${dirPath}:`, dbError);
-            // Continue processing other files
-          }
-        }
-      }
-    }
-
+    
+    // Process all entries recursively
+    processedFiles = await processEntriesRecursively(projectId, zipEntries, '', processedFiles);
+    
     // Update project status to completed
     await ProjectModel.updateStatus(projectId, 'completed');
     console.log(`Successfully completed processing project ${projectId}. Processed ${processedFiles} files/directories`);
@@ -391,4 +681,88 @@ async function processZipFile(projectId: number, filePath: string) {
     await ProjectModel.updateStatus(projectId, 'failed');
     console.log(`Marked project ${projectId} as failed`);
   }
+}
+
+async function processEntriesRecursively(projectId: number, entries: any[], basePath: string, processedFiles: number): Promise<number> {
+  for (const entry of entries) {
+    if (!entry.isDirectory) {
+      const entryPath = basePath ? `${basePath}/${entry.entryName}` : entry.entryName;
+      const fileName = path.basename(entryPath);
+      const parentDir = path.dirname(entryPath) === '.' ? null : path.dirname(entryPath);
+      const fileType = path.extname(fileName);
+      
+      // Check if this is a JAR file (recursive extraction)
+      if (fileType.toLowerCase() === '.jar') {
+        console.log(`Processing JAR file: ${entryPath}`);
+        try {
+          // Extract JAR contents
+          const jarBuffer = entry.getData();
+          const jarZip = new AdmZip(jarBuffer);
+          const jarEntries = jarZip.getEntries();
+          
+          console.log(`Found ${jarEntries.length} entries in JAR file ${fileName}`);
+          
+          // Recursively process JAR contents
+          processedFiles = await processEntriesRecursively(projectId, jarEntries, entryPath, processedFiles);
+          
+        } catch (jarError) {
+          console.error(`Error processing JAR file ${entryPath}:`, jarError);
+          // Continue with other files
+        }
+      } else {
+        // Handle regular files (non-JAR)
+        // Get content preview for text files
+        let contentPreview: string | undefined = undefined;
+        if (['.txt', '.xml', '.json', '.js', '.ts', '.html', '.css', '.java', '.py', '.properties', '.class'].includes(fileType.toLowerCase())) {
+          try {
+            const content = entry.getData().toString('utf8');
+            contentPreview = content.substring(0, 500); // First 500 characters
+          } catch (error) {
+            // Skip content preview for binary files
+          }
+        }
+
+        try {
+          await ExtractedFileModel.create({
+            project_id: projectId,
+            file_path: entryPath,
+            file_name: fileName,
+            file_type: fileType,
+            file_size: entry.header.size,
+            content_preview: contentPreview,
+            is_directory: false,
+            parent_directory: parentDir || undefined
+          });
+          processedFiles++;
+        } catch (dbError) {
+          console.error(`Error saving file ${entryPath}:`, dbError);
+          // Continue processing other files
+        }
+      }
+    } else {
+      // Handle directories
+      const dirPath = entry.entryName.replace(/\/$/, ''); // Remove trailing slash
+      if (dirPath) {
+        const fullDirPath = basePath ? `${basePath}/${dirPath}` : dirPath;
+        try {
+          await ExtractedFileModel.create({
+            project_id: projectId,
+            file_path: fullDirPath,
+            file_name: path.basename(dirPath),
+            file_type: undefined,
+            file_size: undefined,
+            content_preview: undefined,
+            is_directory: true,
+            parent_directory: path.dirname(dirPath) === '.' ? (basePath || undefined) : (basePath ? `${basePath}/${path.dirname(dirPath)}` : path.dirname(dirPath))
+          });
+          processedFiles++;
+        } catch (dbError) {
+          console.error(`Error saving directory ${fullDirPath}:`, dbError);
+          // Continue processing other files
+        }
+      }
+    }
+  }
+  
+  return processedFiles;
 }

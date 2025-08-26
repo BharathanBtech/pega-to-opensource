@@ -34,6 +34,14 @@ class ExtractedFileModel {
         const result = await database_1.default.query('SELECT DISTINCT parent_directory FROM extracted_files WHERE project_id = $1 AND parent_directory IS NOT NULL ORDER BY parent_directory', [projectId]);
         return result.rows.map(row => row.parent_directory);
     }
+    static async findByProjectIdAndPath(projectId, filePath) {
+        const result = await database_1.default.query('SELECT * FROM extracted_files WHERE project_id = $1 AND file_path = $2', [projectId, filePath]);
+        return result.rows[0] || null;
+    }
+    static async findAllByProjectId(projectId) {
+        const result = await database_1.default.query('SELECT * FROM extracted_files WHERE project_id = $1 ORDER BY file_path', [projectId]);
+        return result.rows;
+    }
 }
 exports.ExtractedFileModel = ExtractedFileModel;
 //# sourceMappingURL=ExtractedFile.js.map

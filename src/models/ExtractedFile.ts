@@ -96,4 +96,13 @@ export class ExtractedFileModel {
     
     return result.rows[0] || null;
   }
+
+  static async findAllByProjectId(projectId: number): Promise<ExtractedFile[]> {
+    const result = await pool.query(
+      'SELECT * FROM extracted_files WHERE project_id = $1 ORDER BY file_path',
+      [projectId]
+    );
+    
+    return result.rows;
+  }
 }

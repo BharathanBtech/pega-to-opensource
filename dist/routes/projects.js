@@ -46,6 +46,9 @@ router.post('/upload', upload.single('file'), projectController_1.uploadProject)
 router.get('/', projectController_1.getProjects);
 router.get('/debug', projectController_1.debugProjects); // Debug endpoint
 router.get('/:id/files', projectController_1.getExtractedFiles);
+router.get('/:id/debug-files', projectController_1.debugProjectFiles); // Debug project files
+router.get('/:id/requirements', projectController_1.generateRequirements); // Generate requirements
+router.get('/:projectId/files/:filePath(*)', projectController_1.getFileContent);
 router.get('/:id', projectController_1.getProject);
 router.delete('/:id', projectController_1.deleteProject);
 exports.default = router;

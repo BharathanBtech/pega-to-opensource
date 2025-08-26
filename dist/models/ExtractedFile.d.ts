@@ -28,5 +28,7 @@ export declare class ExtractedFileModel {
     static countByProjectId(projectId: number): Promise<number>;
     static deleteByProjectId(projectId: number): Promise<void>;
     static getDirectoriesByProjectId(projectId: number): Promise<string[]>;
+    static findByProjectIdAndPath(projectId: number, filePath: string): Promise<ExtractedFile | null>;
+    static findAllByProjectId(projectId: number): Promise<ExtractedFile[]>;
 }
 //# sourceMappingURL=ExtractedFile.d.ts.map
