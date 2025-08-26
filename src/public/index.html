@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pega to Open Source Converter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .auth-section {
+            display: none;
+            margin-bottom: 30px;
+        }
+
+        .auth-section.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #5a6fd8;
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+        }
+
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .upload-section {
+            display: none;
+            margin-bottom: 30px;
+        }
+
+        .upload-section.active {
+            display: block;
+        }
+
+        .file-upload {
+            border: 2px dashed #ddd;
+            padding: 40px;
+            text-align: center;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            transition: border-color 0.3s;
+            position: relative;
+        }
+
+        .file-upload:hover {
+            border-color: #667eea;
+        }
+
+        .file-upload.has-file {
+            border-color: #27ae60;
+            background-color: #f8fff9;
+        }
+
+        .projects-section {
+            display: none;
+        }
+
+        .projects-section.active {
+            display: block;
+        }
+
+        .project-card {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 20px;
+            margin-bottom: 15px;
+            background: #f9f9f9;
+        }
+
+        .project-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .project-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .project-status {
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-uploaded { background: #f39c12; color: white; }
+        .status-processing { background: #3498db; color: white; }
+        .status-completed { background: #27ae60; color: white; }
+        .status-failed { background: #e74c3c; color: white; }
+
+        .files-section {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .files-section.active {
+            display: block;
+        }
+
+        .file-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .file-item:last-child {
+            border-bottom: none;
+        }
+
+        .file-icon {
+            margin-right: 10px;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            gap: 10px;
+        }
+
+        .pagination button {
+            padding: 8px 12px;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .user-info {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Pega to Open Source Converter</h1>
+            <p>Convert your Pega applications to open source format</p>
+        </div>
+
+        <div class="content">
+            <!-- Login Section -->
+            <div id="loginSection" class="auth-section active">
+                <h2>Login</h2>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="loginUsername">Username:</label>
+                        <input type="text" id="loginUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Password:</label>
+                        <input type="password" id="loginPassword" required>
+                    </div>
+                    <button type="submit">Login</button>
+                    <button type="button" onclick="showRegister()" class="btn-secondary">Register</button>
+                </form>
+            </div>
+
+            <!-- Register Section -->
+            <div id="registerSection" class="auth-section">
+                <h2>Register</h2>
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label for="registerUsername">Username:</label>
+                        <input type="text" id="registerUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerEmail">Email:</label>
+                        <input type="email" id="registerEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPassword">Password:</label>
+                        <input type="password" id="registerPassword" required>
+                    </div>
+                    <button type="submit">Register</button>
+                    <button type="button" onclick="showLogin()" class="btn-secondary">Back to Login</button>
+                </form>
+            </div>
+
+            <!-- Main Application -->
+            <div id="mainApp" style="display: none;">
+                <!-- User Info -->
+                <div id="userInfo" class="user-info">
+                    <div>
+                        <strong>Welcome, <span id="userDisplayName"></span>!</strong>
+                    </div>
+                    <button onclick="logout()" class="btn-danger">Logout</button>
+                </div>
+
+                <!-- Upload Section -->
+                <div id="uploadSection" class="upload-section active">
+                    <h2>Upload Pega Application</h2>
+                    <form id="uploadForm">
+                        <div class="form-group">
+                            <label for="projectName">Project Name:</label>
+                            <input type="text" id="projectName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="projectDescription">Description (optional):</label>
+                            <textarea id="projectDescription" rows="3"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <div class="file-upload">
+                                <input type="file" id="zipFile" accept=".zip" required style="display: none;">
+                                <label for="zipFile" style="cursor: pointer;">
+                                    <strong>Click to select ZIP file</strong><br>
+                                    <small>Only ZIP files containing Pega applications are allowed</small>
+                                </label>
+                                <div id="selectedFile" style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 5px; display: none;">
+                                    <strong>Selected file:</strong> <span id="fileName"></span>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit">Upload Project</button>
+                    </form>
+                </div>
+
+                <!-- Projects Section -->
+                <div id="projectsSection" class="projects-section">
+                    <h2>Your Projects</h2>
+                    <button onclick="loadProjects()" style="margin-bottom: 10px;">Refresh Projects</button>
+                    <button onclick="debugProjects()" style="margin-bottom: 10px; margin-left: 10px; background: #e67e22;">Debug All Projects</button>
+                    <div id="projectsList"></div>
+                </div>
+
+                <!-- Files Section -->
+                <div id="filesSection" class="files-section">
+                    <h2>Project Files</h2>
+                    <div id="filesList"></div>
+                    <div id="pagination" class="pagination"></div>
+                </div>
+            </div>
+
+            <!-- Alert Messages -->
+            <div id="alertContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+        let currentUser = null;
+        let currentProject = null;
+        let currentPage = 1;
+
+        // Authentication Functions
+        function showLogin() {
+            document.getElementById('loginSection').classList.add('active');
+            document.getElementById('registerSection').classList.remove('active');
+        }
+
+        function showRegister() {
+            document.getElementById('loginSection').classList.remove('active');
+            document.getElementById('registerSection').classList.add('active');
+        }
+
+        function showAlert(message, type = 'success') {
+            const alertContainer = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            alertContainer.appendChild(alert);
+            setTimeout(() => alert.remove(), 5000);
+        }
+
+        // Login Form
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    localStorage.setItem('token', data.token);
+                    currentUser = data.user;
+                    showMainApp();
+                    loadProjects();
+                } else {
+                    showAlert(data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('Login failed. Please try again.', 'error');
+            }
+        });
+
+        // Register Form
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('registerUsername').value;
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    localStorage.setItem('token', data.token);
+                    currentUser = data.user;
+                    showMainApp();
+                    loadProjects();
+                } else {
+                    showAlert(data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('Registration failed. Please try again.', 'error');
+            }
+        });
+
+        // Upload Form
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('name', document.getElementById('projectName').value);
+            formData.append('description', document.getElementById('projectDescription').value);
+            formData.append('file', document.getElementById('zipFile').files[0]);
+
+            try {
+                const response = await fetch(`${API_BASE}/projects/upload`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    body: formData
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    showAlert('Project uploaded successfully!');
+                    document.getElementById('uploadForm').reset();
+                    document.getElementById('selectedFile').style.display = 'none';
+                    document.querySelector('.file-upload').classList.remove('has-file');
+                    loadProjects();
+                } else {
+                    showAlert(data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('Upload failed. Please try again.', 'error');
+            }
+        });
+
+        // Main App Functions
+        function showMainApp() {
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('registerSection').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
+            document.getElementById('userDisplayName').textContent = currentUser.username;
+        }
+
+        async function loadProjects() {
+            try {
+                console.log('Loading projects...');
+                const response = await fetch(`${API_BASE}/projects`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+
+                const data = await response.json();
+                console.log('Projects response:', data);
+                
+                if (response.ok) {
+                    displayProjects(data.projects);
+                } else {
+                    showAlert(data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Error loading projects:', error);
+                showAlert('Failed to load projects.', 'error');
+            }
+        }
+
+        async function debugProjects() {
+            try {
+                console.log('Debugging all projects...');
+                const response = await fetch(`${API_BASE}/projects/debug`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+
+                const data = await response.json();
+                console.log('Debug projects response:', data);
+                
+                if (response.ok) {
+                    alert(`Found ${data.projects.length} projects in database:\n${data.projects.map(p => `${p.id}: ${p.name} (${p.status})`).join('\n')}`);
+                } else {
+                    showAlert(data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Error debugging projects:', error);
+                showAlert('Failed to debug projects.', 'error');
+            }
+        }
+
+        function displayProjects(projects) {
+            const projectsList = document.getElementById('projectsList');
+            if (projects.length === 0) {
+                projectsList.innerHTML = '<p>No projects found. Upload your first Pega application!</p>';
+                return;
+            }
+
+            projectsList.innerHTML = projects.map(project => `
+                <div class="project-card">
+                    <div class="project-header">
+                        <div class="project-name">${project.name}</div>
+                        <span class="project-status status-${project.status}">${project.status}</span>
+                    </div>
+                    <p><strong>File:</strong> ${project.original_filename}</p>
+                    <p><strong>Size:</strong> ${formatFileSize(project.file_size)}</p>
+                    <p><strong>Uploaded:</strong> ${new Date(project.created_at).toLocaleDateString()}</p>
+                    ${project.description ? `<p><strong>Description:</strong> ${project.description}</p>` : ''}
+                    <div style="margin-top: 10px;">
+                        <button onclick="viewFiles(${project.id})" ${project.status !== 'completed' ? 'disabled' : ''}>View Files</button>
+                        <button onclick="deleteProject(${project.id})" class="btn-danger">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function viewFiles(projectId) {
+            currentProject = projectId;
+            currentPage = 1;
+            await loadFiles();
+            document.getElementById('uploadSection').classList.remove('active');
+            document.getElementById('projectsSection').classList.remove('active');
+            document.getElementById('filesSection').classList.add('active');
+        }
+
+        async function loadFiles() {
+            try {
+                const response = await fetch(`${API_BASE}/projects/${currentProject}/files?page=${currentPage}&limit=20`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    displayFiles(data.files, data.pagination);
+                } else {
+                    showAlert(data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('Failed to load files.', 'error');
+            }
+        }
+
+        function displayFiles(files, pagination) {
+            const filesList = document.getElementById('filesList');
+            const paginationDiv = document.getElementById('pagination');
+
+            if (files.length === 0) {
+                filesList.innerHTML = '<p>No files found in this project.</p>';
+                paginationDiv.innerHTML = '';
+                return;
+            }
+
+            filesList.innerHTML = files.map(file => `
+                <div class="file-item">
+                    <div>
+                        <span class="file-icon">${file.is_directory ? '📁' : '📄'}</span>
+                        <strong>${file.file_name}</strong>
+                        ${file.file_type ? `<small>(${file.file_type})</small>` : ''}
+                    </div>
+                    <div>
+                        ${file.file_size ? `<small>${formatFileSize(file.file_size)}</small>` : ''}
+                    </div>
+                </div>
+            `).join('');
+
+            // Pagination
+            paginationDiv.innerHTML = '';
+            if (pagination.pages > 1) {
+                if (pagination.page > 1) {
+                    paginationDiv.innerHTML += `<button onclick="changePage(${pagination.page - 1})">Previous</button>`;
+                }
+                paginationDiv.innerHTML += `<span>Page ${pagination.page} of ${pagination.pages}</span>`;
+                if (pagination.page < pagination.pages) {
+                    paginationDiv.innerHTML += `<button onclick="changePage(${pagination.page + 1})">Next</button>`;
+                }
+            }
+        }
+
+        async function changePage(page) {
+            currentPage = page;
+            await loadFiles();
+        }
+
+        async function deleteProject(projectId) {
+            if (!confirm('Are you sure you want to delete this project?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/projects/${projectId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+
+                if (response.ok) {
+                    showAlert('Project deleted successfully!');
+                    loadProjects();
+                } else {
+                    const data = await response.json();
+                    showAlert(data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('Failed to delete project.', 'error');
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            currentUser = null;
+            currentProject = null;
+            document.getElementById('mainApp').style.display = 'none';
+            document.getElementById('loginSection').style.display = 'block';
+            document.getElementById('loginSection').classList.add('active');
+            document.getElementById('registerSection').classList.remove('active');
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // File selection handler
+        document.getElementById('zipFile').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            const selectedFileDiv = document.getElementById('selectedFile');
+            const fileNameSpan = document.getElementById('fileName');
+            const fileUploadDiv = document.querySelector('.file-upload');
+            
+            if (file) {
+                fileNameSpan.textContent = `${file.name} (${formatFileSize(file.size)})`;
+                selectedFileDiv.style.display = 'block';
+                fileUploadDiv.classList.add('has-file');
+            } else {
+                selectedFileDiv.style.display = 'none';
+                fileUploadDiv.classList.remove('has-file');
+            }
+        });
+
+        // Check if user is already logged in
+        window.addEventListener('load', () => {
+            const token = localStorage.getItem('token');
+            if (token) {
+                // You could verify the token here
+                showMainApp();
+                loadProjects();
+            }
+        });
+    </script>
+</body>
+</html>
